@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Água de Novo — Mapa Hídrico Escola</title>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0288d1',
+                            700: '#0369a1',
+                            800: '#075985',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Pin Pulsing and Hover Animations */
+        .pin-marker { transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .pin-marker:hover { transform: translate(-50%, -50%) scale(1.3) !important; z-index: 40 !important; }
+        .pin-marker.active-pin {
+            transform: translate(-50%, -50%) scale(1.35) !important;
+            z-index: 50 !important;
+            box-shadow: 0 0 0 6px rgba(2, 132, 199, 0.3), 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Pulse aura for urgent items */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.25); opacity: 0; }
+            100% { transform: scale(0.95); opacity: 0; }
+        }
+        .pulse-urgent::before {
+            content: ''; position: absolute; width: 100%; height: 100%;
+            border-radius: 50%; background-color: rgba(239, 68, 68, 0.6);
+            animation: pulse-ring 2s infinite ease-in-out; z-index: -1;
+        }
+
+        .card-active {
+            border-left-width: 6px !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+            transform: translateX(4px);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-sky-700 via-brand-600 to-cyan-600 text-white shadow-lg sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3 text-center sm:text-left">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight leading-none flex items-center gap-2 justify-center sm:justify-start">
+                        <i class="fa-solid fa-droplet text-sky-200"></i> Água de Novo
+                    </h1>
+                    <p class="text-xs text-sky-100 mt-1 font-light">Sistema de Mapeamento e Monitoramento Hídrico Escolar — Afonso Mafrense</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <button onclick="openModal()" class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all transform active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-sky-700" aria-label="Adicionar novo ponto hídrico">
+                    <i class="fa-solid fa-circle-plus"></i>
+                    <span>Novo Ponto</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full flex flex-col gap-6">
+
+        <!-- Dashboard Metrics -->
+        <section aria-label="Resumo dos Indicadores Hídricos" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-red-500 flex flex-col justify-between hover:shadow-md transition-shadow">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Intervenção</span>
+                    <span class="p-2 rounded-xl bg-red-50 text-red-500"><i class="fa-solid fa-triangle-exclamation text-base"></i></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="dash-red-count" class="text-3xl font-extrabold text-slate-800">0</span>
+                    <span class="text-xs text-red-600 bg-red-50 font-medium px-2 py-0.5 rounded-md border border-red-100">Urgente</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-amber-500 flex flex-col justify-between hover:shadow-md transition-shadow">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Em Avaliação</span>
+                    <span class="p-2 rounded-xl bg-amber-50 text-amber-500"><i class="fa-solid fa-magnifying-glass-chart text-base"></i></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="dash-orange-count" class="text-3xl font-extrabold text-slate-800">0</span>
+                    <span class="text-xs text-amber-600 bg-amber-50 font-medium px-2 py-0.5 rounded-md border border-amber-100">Atenção</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-sky-500 flex flex-col justify-between hover:shadow-md transition-shadow">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fontes Reúso</span>
+                    <span class="p-2 rounded-xl bg-sky-50 text-sky-500"><i class="fa-solid fa-recycle text-base"></i></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span id="dash-blue-count" class="text-3xl font-extrabold text-slate-800">0</span>
+                    <span class="text-xs text-sky-600 bg-sky-50 font-medium px-2 py-0.5 rounded-md border border-sky-100">Sustentável</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-rose-600 flex flex-col justify-between hover:shadow-md transition-shadow">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perda Estimada</span>
+                    <span class="p-2 rounded-xl bg-rose-50 text-rose-600"><i class="fa-solid fa-faucet-drip text-base"></i></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <div class="flex items-baseline gap-1">
+                        <span id="dash-loss-total" class="text-3xl font-extrabold text-rose-600">0</span>
+                        <span class="text-xs font-semibold text-rose-500">L/h</span>
+                    </div>
+                    <span id="dash-loss-day" class="text-xs text-slate-500 font-medium">~0 L/dia</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content Area -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- Interactive Blueprint Section -->
+            <section class="lg:col-span-7 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col gap-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-map-location-dot text-brand-600"></i> Planta Baixa Interativa
+                        </h2>
+                        <p class="text-xs text-slate-500">Clique em qualquer local da imagem para marcar um novo ponto hídrico</p>
+                    </div>
+                    <div class="text-xs text-slate-400 italic">Unidade Escolar Afonso Mafrense</div>
+                </div>
+
+                <!-- Planta com a imagem oficial e suporte aos pins -->
+                <div id="blueprint-canvas" onclick="handleMapClick(event)" class="relative bg-slate-900 rounded-xl border-2 border-slate-300 min-h-[380px] sm:min-h-[460px] overflow-hidden select-none cursor-crosshair flex items-center justify-center">
+                    
+                    <img id="blueprint-img" src="6ba18ba0-aaa0-4797-b7d8-eccfdd9b103c.jpg" alt="Mapa hídrico da escola - Unidade Escolar Afonso Mafrense" class="w-full h-full object-contain pointer-events-none select-none" />
+
+                    <!-- Layer de marcadores/pins sobre a imagem -->
+                    <div id="pins-container" class="absolute inset-0 z-10"></div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <span class="font-semibold text-slate-700">Legenda:</span>
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-red-500 inline-block shadow-sm"></span> Vermelho: Intervenção</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm"></span> Laranja: Avaliação</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-sky-500 inline-block shadow-sm"></span> Azul: Potencial de Reúso</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Information Panel & Filters -->
+            <section class="lg:col-span-5 flex flex-col gap-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-filter text-brand-600"></i> Filtrar Registros</h3>
+                        <span id="filtered-count-badge" class="text-xs bg-slate-100 text-slate-600 font-semibold px-2.5 py-0.5 rounded-full border border-slate-200">Mostrando 0</span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-medium" role="tablist">
+                        <button onclick="setFilter('todos')" id="filter-todos" class="filter-btn active py-2 px-1 rounded-lg text-center transition-all bg-white text-brand-700 shadow-sm font-semibold">Todos</button>
+                        <button onclick="setFilter('reparar')" id="filter-reparar" class="filter-btn py-2 px-1 rounded-lg text-center transition-all text-slate-600 hover:text-slate-900">Reparar</button>
+                        <button onclick="setFilter('avaliar')" id="filter-avaliar" class="filter-btn py-2 px-1 rounded-lg text-center transition-all text-slate-600 hover:text-slate-900">Avaliar</button>
+                        <button onclick="setFilter('reuso')" id="filter-reuso" class="filter-btn py-2 px-1 rounded-lg text-center transition-all text-slate-600 hover:text-slate-900">Reúso</button>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator for Data -->
+                <div id="loading-state" class="hidden text-center py-8">
+                    <i class="fa-solid fa-circle-notch fa-spin text-brand-500 text-2xl"></i>
+                    <p class="text-sm text-slate-500 mt-2">Sincronizando com a base de dados...</p>
+                </div>
+
+                <div id="cards-container" class="space-y-3 max-h-[520px] overflow-y-auto pr-1"></div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-12 py-6 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-graduation-cap text-brand-600 text-base"></i>
+                <p><strong>Projeto Pioneiros 2026</strong></p>
+            </div>
+            <p class="text-slate-400">Escola Sustentável &bull; Monitoramento de Recursos Hídricos</p>
+        </div>
+    </footer>
+
+    <!-- Modal Form -->
+    <div id="add-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden transition-opacity duration-300">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden transform transition-all scale-95 opacity-0 modal-box">
+            <div class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 bg-brand-500/20 text-brand-400 rounded-xl"><i class="fa-solid fa-location-dot"></i></div>
+                    <div>
+                        <h3 class="font-bold text-base">Mapear Novo Ponto</h3>
+                        <p class="text-xs text-slate-400">Insira os detalhes do ponto observado</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <form id="point-form" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label for="form-title" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Título *</label>
+                    <input type="text" id="form-title" placeholder="Ex: Torneira com vazamento" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="form-location" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Ambiente *</label>
+                        <select id="form-location" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <optgroup label="Bloco 4 — Sanitários">
+                                <option value="B.M. (Sanitário Masculino)">B.M. (Sanitário Masculino)</option>
+                                <option value="B.F. (Sanitário Feminino)">B.F. (Sanitário Feminino)</option>
+                                <option value="Banheiro">Banheiro Geral</option>
+                                <option value="Bebedouro Pátio">Bebedouro Pátio</option>
+                            </optgroup>
+                            <optgroup label="Bloco 2 — Lateral Esquerdo">
+                                <option value="Sala de Ciências">Sala de Ciências</option>
+                                <option value="Sala de Informática">Sala de Informática</option>
+                                <option value="Sala de Vídeo">Sala de Vídeo</option>
+                                <option value="Sala Biblioteca">Sala Biblioteca</option>
+                                <option value="Sala AEE">Sala AEE</option>
+                            </optgroup>
+                            <optgroup label="Bloco 3 — Central de Aulas">
+                                <option value="Sala de Aula">Sala de Aula</option>
+                                <option value="Sala da Saúde">Sala da Saúde</option>
+                                <option value="Sala dos Professores">Sala dos Professores</option>
+                                <option value="Secretaria">Secretaria</option>
+                                <option value="Sala do Diretor">Sala do Diretor</option>
+                            </optgroup>
+                            <optgroup label="Bloco 5 — Refeitório & Áreas Externas">
+                                <option value="Refeitório">Refeitório</option>
+                                <option value="Pátio / Área Coberta">Pátio / Área Coberta</option>
+                                <option value="Quadra Descoberta">Quadra Descoberta</option>
+                                <option value="Quadra Coberta">Quadra Coberta</option>
+                                <option value="Estacionamento">Estacionamento</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="form-type" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Classificação *</label>
+                        <select id="form-type" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <option value="reparar">🔴 Reparar Urgente</option>
+                            <option value="avaliar">🟠 Em Avaliação</option>
+                            <option value="reuso">🔵 Fonte de Reúso</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="form-flow" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Vazão (L/h)</label>
+                        <input type="number" id="form-flow" min="0" step="0.1" value="1.5" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Posição (% X/Y)</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="number" id="form-x" min="0" max="100" value="50" required placeholder="X" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <input type="number" id="form-y" min="0" max="100" value="50" required placeholder="Y" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label for="form-action" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Ação Recomendada *</label>
+                    <input type="text" id="form-action" placeholder="Ex: Substituir reparo da torneira" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label for="form-notes" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Observações</label>
+                    <textarea id="form-notes" rows="2" placeholder="Informações adicionais..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"></textarea>
+                </div>
+                <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                    <button type="submit" id="submit-btn" class="px-5 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-md transition-all">Salvar Ponto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ======= CONFIGURAÇÃO DA API =======
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyGszrD3iovTqGgjYx1XL7NCIlBfb3JL075MkfMzj6yKld3Xs25op5iA_JZKG2IfpSQRQ/exec';
+        
+        let waterPoints = []; 
+        let activePointId = null;
+        let currentFilter = 'todos';
+
+        const TYPE_CONFIG = {
+            reparar: { label: 'Reparar', badgeText: '🔴 Urgente', badgeBg: 'bg-red-100 text-red-700 border-red-200', pinBg: 'bg-red-500 text-white ring-red-300', cardBorder: 'border-l-red-500', cardBg: 'bg-red-50/40 hover:bg-red-50/80', icon: 'fa-faucet-drip' },
+            avaliar: { label: 'Avaliar', badgeText: '🟠 Em Avaliação', badgeBg: 'bg-amber-100 text-amber-700 border-amber-200', pinBg: 'bg-amber-500 text-white ring-amber-300', cardBorder: 'border-l-amber-500', cardBg: 'bg-amber-50/40 hover:bg-amber-50/80', icon: 'fa-clipboard-check' },
+            reuso: { label: 'Reúso', badgeText: '🔵 Potencial Reúso', badgeBg: 'bg-sky-100 text-sky-700 border-sky-200', pinBg: 'bg-sky-500 text-white ring-sky-300', cardBorder: 'border-l-sky-500', cardBg: 'bg-sky-50/40 hover:bg-sky-50/80', icon: 'fa-hand-holding-droplet' }
+        };
+
+        const pinsContainer = document.getElementById('pins-container');
+        const cardsContainer = document.getElementById('cards-container');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPointsFromDatabase(); 
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+        });
+
+        // Captura o clique direto na imagem da planta baixa para posicionar o pin (%X e %Y)
+        function handleMapClick(event) {
+            if (event.target.closest('.pin-marker')) return;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+
+            const percentX = Math.round((clickX / rect.width) * 100);
+            const percentY = Math.round((clickY / rect.height) * 100);
+
+            openModal(percentX, percentY);
+        }
+
+        // ======= OBTER DADOS DO GOOGLE SHEETS =======
+        async function loadPointsFromDatabase() {
+            document.getElementById('loading-state').classList.remove('hidden');
+            
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                if (Array.isArray(data)) {
+                    waterPoints = data;
+                }
+            } catch (error) {
+                console.error('Erro ao conectar ao banco de dados:', error);
+            } finally {
+                document.getElementById('loading-state').classList.add('hidden');
+                renderApp();
+            }
+        }
+
+        function renderApp() {
+            calculateDashboardMetrics();
+            renderMapPins();
+            renderCardsList();
+        }
+
+        function calculateDashboardMetrics() {
+            const counts = { reparar: 0, avaliar: 0, reuso: 0 };
+            let totalLossPerHour = 0;
+            waterPoints.forEach(pt => {
+                if (counts[pt.type] !== undefined) counts[pt.type]++;
+                if (pt.type === 'reparar' || pt.type === 'avaliar') totalLossPerHour += (parseFloat(pt.flowRate) || 0);
+            });
+            document.getElementById('dash-red-count').textContent = counts.reparar;
+            document.getElementById('dash-orange-count').textContent = counts.avaliar;
+            document.getElementById('dash-blue-count').textContent = counts.reuso;
+            document.getElementById('dash-loss-total').textContent = totalLossPerHour.toFixed(1);
+            document.getElementById('dash-loss-day').textContent = `~${Math.round(totalLossPerHour * 24)} L/dia`;
+        }
+
+        function renderMapPins() {
+            pinsContainer.innerHTML = '';
+            getFilteredPoints().forEach(pt => {
+                const config = TYPE_CONFIG[pt.type] || TYPE_CONFIG.avaliar;
+                const isActive = pt.id === activePointId;
+                const pin = document.createElement('button');
+                pin.className = `pin-marker absolute flex items-center justify-center w-8 h-8 rounded-full shadow-md font-bold text-xs cursor-pointer focus:outline-none ${config.pinBg} ${isActive ? 'active-pin' : ''} ${pt.type === 'reparar' ? 'pulse-urgent' : ''}`;
+                pin.style.left = `${pt.x}%`;
+                pin.style.top = `${pt.y}%`;
+                pin.innerHTML = `<span class="pointer-events-none">${String(pt.id).toUpperCase()}</span>`;
+                pin.onclick = (e) => { e.stopPropagation(); selectPoint(pt.id); };
+                pinsContainer.appendChild(pin);
+            });
+        }
+
+        function renderCardsList() {
+            cardsContainer.innerHTML = '';
+            const filteredPoints = getFilteredPoints();
+            document.getElementById('filtered-count-badge').textContent = `Mostrando ${filteredPoints.length}`;
+
+            if (filteredPoints.length === 0) {
+                cardsContainer.innerHTML = `<div class="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-300 p-6"><i class="fa-solid fa-droplet-slash text-slate-300 text-3xl mb-2"></i><p class="text-sm font-semibold text-slate-600">Nenhum ponto encontrado</p></div>`;
+                return;
+            }
+
+            filteredPoints.forEach(pt => {
+                const config = TYPE_CONFIG[pt.type] || TYPE_CONFIG.avaliar;
+                const isActive = pt.id === activePointId;
+                const card = document.createElement('div');
+                card.id = `card-${pt.id}`;
+                card.className = `card-item p-4 rounded-xl border border-slate-200 transition-all cursor-pointer ${config.cardBorder} ${config.cardBg} ${isActive ? 'card-active bg-white ring-2 ring-brand-500/30' : ''}`;
+                card.onclick = () => selectPoint(pt.id);
+                
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">${pt.location}</span>
+                            <h4 class="font-bold text-slate-800 text-sm flex items-center gap-1.5"><i class="fa-solid ${config.icon} text-xs"></i>${pt.title}</h4>
+                        </div>
+                        <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${config.badgeBg}">${config.badgeText}</span>
+                    </div>
+                    <div class="text-xs text-slate-600 space-y-1 mb-3">
+                        <p><strong><i class="fa-solid fa-gauge-high text-slate-400 mr-1"></i> Vazão:</strong> <span class="font-semibold">${pt.flowRate} L/h</span></p>
+                        <p><strong><i class="fa-solid fa-wrench text-slate-400 mr-1"></i> Ação:</strong> ${pt.action}</p>
+                        ${pt.notes ? `<p class="text-slate-500 italic mt-1">${pt.notes}</p>` : ''}
+                    </div>
+                    <div class="pt-2 border-t border-slate-200/60 flex items-center justify-end text-xs">
+                        <button onclick="event.stopPropagation(); deletePoint('${pt.id}')" class="text-slate-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-colors" title="Remover ponto hídrico">
+                            <i class="fa-solid fa-trash-can"></i> Apagar
+                        </button>
+                    </div>
+                `;
+                cardsContainer.appendChild(card);
+            });
+        }
+
+        function selectPoint(id) {
+            activePointId = (activePointId === id) ? null : id;
+            renderMapPins(); 
+            renderCardsList();
+            if (activePointId) document.getElementById(`card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function setFilter(filterType) {
+            currentFilter = filterType;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-white', 'text-brand-700', 'shadow-sm', 'font-semibold');
+                btn.classList.add('text-slate-600');
+            });
+            const activeBtn = document.getElementById(`filter-${filterType}`);
+            if (activeBtn) activeBtn.classList.add('active', 'bg-white', 'text-brand-700', 'shadow-sm', 'font-semibold');
+            renderApp();
+        }
+
+        function getFilteredPoints() {
+            return currentFilter === 'todos' ? waterPoints : waterPoints.filter(p => p.type === currentFilter);
+        }
+
+        function openModal(defaultX = 50, defaultY = 50) {
+            document.getElementById('form-x').value = defaultX;
+            document.getElementById('form-y').value = defaultY;
+
+            const modal = document.getElementById('add-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.querySelector('.modal-box').classList.remove('scale-95', 'opacity-0'), 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('add-modal');
+            modal.querySelector('.modal-box').classList.add('scale-95', 'opacity-0');
+            setTimeout(() => { modal.classList.add('hidden'); document.getElementById('point-form').reset(); }, 200);
+        }
+
+        // ======= GUARDAR DADOS NO GOOGLE SHEETS =======
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('submit-btn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...';
+            btn.disabled = true;
+
+            const nextNum = waterPoints.length > 0 ? Math.max(...waterPoints.map(p => parseInt(String(p.id).replace('p', '')) || 0)) + 1 : 1;
+            let vazaoInput = document.getElementById('form-flow').value.replace(',', '.');
+
+            const newPoint = {
+                actionType: 'add',
+                id: `p${nextNum < 10 ? '0' + nextNum : nextNum}`,
+                title: document.getElementById('form-title').value.trim(),
+                location: document.getElementById('form-location').value,
+                type: document.getElementById('form-type').value,
+                flowRate: parseFloat(vazaoInput) || 0,
+                action: document.getElementById('form-action').value.trim(),
+                notes: document.getElementById('form-notes').value.trim(),
+                x: parseFloat(document.getElementById('form-x').value) || 50,
+                y: parseFloat(document.getElementById('form-y').value) || 50
+            };
+
+            fetch(API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(newPoint)
+            }).then(() => {
+                waterPoints.push(newPoint);
+                activePointId = newPoint.id;
+                closeModal();
+                renderApp();
+            }).catch(error => {
+                console.warn("Envio finalizado.", error);
+                waterPoints.push(newPoint);
+                closeModal();
+                renderApp();
+            }).finally(() => {
+                btn.innerHTML = 'Salvar Ponto';
+                btn.disabled = false;
+            });
+        }
+
+        // ======= APAGAR DADOS DO GOOGLE SHEETS =======
+        async function deletePoint(id) {
+            if (confirm('Deseja realmente remover este ponto hídrico do mapeamento?')) {
+                waterPoints = waterPoints.filter(p => p.id !== id);
+                if (activePointId === id) activePointId = null;
+                renderApp();
+
+                const deleteData = {
+                    actionType: 'delete',
+                    id: id
+                };
+
+                fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(deleteData)
+                }).catch(error => {
+                    console.warn("Aviso de rede ignorado na exclusão.", error);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
